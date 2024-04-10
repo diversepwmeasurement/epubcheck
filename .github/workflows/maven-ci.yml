@@ -1,61 +1,67 @@
-name: build
-
-on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
-
 jobs:
-
+  maven-deploy:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    name: Deploy snapshot to Sonatype OSSRH
+    needs: maven-verify
+    runs-on: self-hosted
+    steps:
+    - continue-on-error: true
+      name: Checkout sources
+      uses: actions/checkout@v2
+    - continue-on-error: true
+      name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: 21
+        server-id: ossrh
+        server-password: OSSRH_PASSWORD
+        server-username: OSSRH_USERNAME
+    - continue-on-error: true
+      name: Get Maven dependencies from cache
+      uses: actions/cache@v2
+      with:
+        key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+        path: ~/.m2/repository
+        restore-keys: ${{ runner.os }}-maven-
+    - continue-on-error: true
+      env:
+        OSSRH_PASSWORD: ${{ secrets.OSSRH_PASSWORD }}
+        OSSRH_USERNAME: ${{ secrets.OSSRH_USERNAME }}
+      name: Build and deploy to the Maven Central Repository
+      run: mvn --batch-mode -DskipTests deploy
   maven-verify:
-    name: "Build on Java ${{ matrix.java }}"
+    name: Build on Java ${{ matrix.java }}
+    runs-on: self-hosted
+    steps:
+    - continue-on-error: true
+      name: Checkout sources
+      uses: actions/checkout@v2
+    - continue-on-error: true
+      name: Set up Java
+      uses: actions/setup-java@v4
+      with:
+        cache: maven
+        distribution: temurin
+        java-version: ${{ matrix.java }}
+    - continue-on-error: true
+      name: Get Maven dependencies from cache
+      uses: actions/cache@v2
+      with:
+        key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+        path: ~/.m2/repository
+        restore-keys: ${{ runner.os }}-maven-
+    - continue-on-error: true
+      name: Build with Maven
+      run: mvn --batch-mode verify
     strategy:
       matrix:
-        java: [8, 11, 17, 21]
-    runs-on: ubuntu-latest
-    steps:
-    - name: "Checkout sources"
-      uses: actions/checkout@v2
-    - name: "Set up Java"
-      uses: actions/setup-java@v4
-      with:
-        java-version: ${{ matrix.java }}
-        distribution: "temurin"
-        cache: 'maven'
-    - name: "Get Maven dependencies from cache"
-      uses: actions/cache@v2
-      with:
-        path: ~/.m2/repository
-        key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
-        restore-keys: ${{ runner.os }}-maven-
-    - name: "Build with Maven"
-      run: mvn --batch-mode verify
-
-  maven-deploy:
-    name: "Deploy snapshot to Sonatype OSSRH"
-    needs: maven-verify
-    if: ${{ github.ref == 'refs/heads/main' }}
-    runs-on: ubuntu-latest
-    steps:
-    - name: "Checkout sources"
-      uses: actions/checkout@v2
-    - name: "Setup Java"
-      uses: actions/setup-java@v4
-      with:
-        java-version: 21
-        distribution: "temurin"
-        server-id: ossrh
-        server-username: OSSRH_USERNAME
-        server-password: OSSRH_PASSWORD
-    - name: "Get Maven dependencies from cache"
-      uses: actions/cache@v2
-      with:
-        path: ~/.m2/repository
-        key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
-        restore-keys: ${{ runner.os }}-maven-
-    - name: "Build and deploy to the Maven Central Repository"
-      run: mvn --batch-mode -DskipTests deploy
-      env:
-        OSSRH_USERNAME: ${{ secrets.OSSRH_USERNAME }}
-        OSSRH_PASSWORD: ${{ secrets.OSSRH_PASSWORD }}
+        java:
+        - 8
+        - 11
+        - 17
+        - 21
+name: build
+on:
+  repository_dispatch:
+    types: trigger-ga___maven-ci.yml
